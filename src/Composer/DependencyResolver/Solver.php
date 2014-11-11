@@ -56,69 +56,80 @@ class Solver
 
         $rulesCount = count($this->rules);
         for ($ruleIndex = 0; $ruleIndex < $rulesCount; $ruleIndex++) {
-            $rule = $this->rules->ruleById($ruleIndex);
+            $this->makeAssertianRuleDecision($ruleIndex, $decisionStart);
+        }
+    }
+    
+    protected function makeAssertianRuleDecision(&$ruleIndex, $decisionStart)
+    {
+        $rule = $this->rules->ruleById($ruleIndex);
 
-            if (!$rule->isAssertion() || $rule->isDisabled()) {
-                continue;
-            }
+        if (!$rule->isAssertion() || $rule->isDisabled()) {
+            return;
+        }
 
-            $literals = $rule->getLiterals();
-            $literal = $literals[0];
+        $literals = $rule->getLiterals();
+        $literal = $literals[0];
 
-            if (!$this->decisions->decided(abs($literal))) {
-                $this->decisions->decide($literal, 1, $rule);
-                continue;
-            }
+        if (!$this->decisions->decided(abs($literal))) {
+            $this->decisions->decide($literal, 1, $rule);
+            return;
+        }
 
-            if ($this->decisions->satisfy($literal)) {
-                continue;
-            }
+        if ($this->decisions->satisfy($literal)) {
+            return;
+        }
 
-            // found a conflict
-            if (RuleSet::TYPE_LEARNED === $rule->getType()) {
-                $rule->disable();
-                continue;
-            }
+        // found a conflict
+        if (RuleSet::TYPE_LEARNED === $rule->getType()) {
+            $rule->disable();
+            return;
+        }
 
-            $conflict = $this->decisions->decisionRule($literal);
+        $conflict = $this->decisions->decisionRule($literal);
 
-            if ($conflict && RuleSet::TYPE_PACKAGE === $conflict->getType()) {
-                $problem = new Problem($this->pool);
-
-                $problem->addRule($rule);
-                $problem->addRule($conflict);
-                $this->disableProblem($rule);
-                $this->problems[] = $problem;
-                continue;
-            }
-
-            // conflict with another job
+        if ($conflict && RuleSet::TYPE_PACKAGE === $conflict->getType()) {
             $problem = new Problem($this->pool);
+
             $problem->addRule($rule);
             $problem->addRule($conflict);
-
-            // push all of our rules (can only be job rules)
-            // asserting this literal on the problem stack
-            foreach ($this->rules->getIteratorFor(RuleSet::TYPE_JOB) as $assertRule) {
-                if ($assertRule->isDisabled() || !$assertRule->isAssertion()) {
-                    continue;
-                }
-
-                $assertRuleLiterals = $assertRule->getLiterals();
-                $assertRuleLiteral = $assertRuleLiterals[0];
-
-                if (abs($literal) !== abs($assertRuleLiteral)) {
-                    continue;
-                }
-
-                $problem->addRule($assertRule);
-                $this->disableProblem($assertRule);
-            }
+            $this->disableProblem($rule);
             $this->problems[] = $problem;
-
-            $this->decisions->resetToOffset($decisionStart);
-            $ruleIndex = -1;
+            return;
         }
+
+        // conflict with another job
+        $this->pushJobRules($literal, $rule, $conflict);
+
+        $this->decisions->resetToOffset($decisionStart);
+        $ruleIndex = -1;
+
+    }
+    
+    protected function pushJobRules($literal, $rule, $conflict)
+    {
+        $problem = new Problem($this->pool);
+        $problem->addRule($rule);
+        $problem->addRule($conflict);
+
+        // push all of our rules (can only be job rules)
+        // asserting this literal on the problem stack
+        foreach ($this->rules->getIteratorFor(RuleSet::TYPE_JOB) as $assertRule) {
+            if ($assertRule->isDisabled() || !$assertRule->isAssertion()) {
+                continue;
+            }
+
+            $assertRuleLiterals = $assertRule->getLiterals();
+            $assertRuleLiteral = $assertRuleLiterals[0];
+
+            if (abs($literal) !== abs($assertRuleLiteral)) {
+                continue;
+            }
+
+            $problem->addRule($assertRule);
+            $this->disableProblem($assertRule);
+        }
+        $this->problems[] = $problem;
     }
 
     protected function setupInstalledMap()
@@ -181,13 +192,8 @@ class Solver
         $this->makeAssertionRuleDecisions();
 
         $this->runSat(true);
+        $this->removeUndecided();
 
-        // decide to remove everything that's installed and undecided
-        foreach ($this->installedMap as $packageId => $void) {
-            if ($this->decisions->undecided($packageId)) {
-                $this->decisions->decide(-$packageId, 1, null);
-            }
-        }
 
         if ($this->problems) {
             throw new SolverProblemsException($this->problems, $this->installedMap);
@@ -196,6 +202,15 @@ class Solver
         $transaction = new Transaction($this->policy, $this->pool, $this->installedMap, $this->decisions);
 
         return $transaction->getOperations();
+    }
+    
+    protected function removeUndecided()
+    {
+        foreach ($this->installedMap as $packageId => $void) {
+            if ($this->decisions->undecided($packageId)) {
+                $this->decisions->decide(-$packageId, 1, null);
+            }
+        }
     }
 
     protected function literalFromId($id)
