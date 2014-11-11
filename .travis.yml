@@ -18,6 +18,7 @@ before_script:
     - bin/composer install --prefer-source
     - git config --global user.name travis-ci
     - git config --global user.email travis@example.com
+    - mkdir /tmp/coverage
 
 script:
     - ls -d tests/Composer/Test/* | parallel --gnu --keep-order 'echo "Running {} tests"; ./vendor/bin/phpunit -c tests/complete.phpunit.xml --coverage-php /tmp/coverage/{}.cov {};' || exit 1
