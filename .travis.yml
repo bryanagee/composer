@@ -21,7 +21,12 @@ before_script:
     - git config --global user.email travis@example.com
 
 script:
-    - ls -d tests/Composer/Test/* | parallel --gnu --keep-order 'echo "Running {} tests"; ./vendor/bin/phpunit -c tests/complete.phpunit.xml {};' || exit 1
+    - ls -d tests/Composer/Test/* | parallel --gnu --keep-order 'echo "Running {} tests"; ./vendor/bin/phpunit -c tests/complete.phpunit.xml --coverage-php /tmp/coverage/{}.cov {};' || exit 1
+    - phpcov merge --clover coverage.clover /tmp/coverage
+
+after_script:
+    - wget https://scrutinizer-ci.com/ocular.phar
+    - php ocular.phar code-coverage:upload --format=php-clover coverage.clover
 
 git:
   depth: 5
