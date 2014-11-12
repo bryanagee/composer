@@ -71,6 +71,9 @@ class InstallerTest extends TestCase
         $autoloadGenerator = $this->getMockBuilder('Composer\Autoload\AutoloadGenerator')->disableOriginalConstructor()->getMock();
 
         $installer = new Installer($io, $config, clone $rootPackage, $downloadManager, $repositoryManager, $locker, $installationManager, $eventDispatcher, $autoloadGenerator);
+        if (isset($options['optimizeAutoloader'])) {
+            $installer->setOptimizeAutoloader(true);
+        }
         $result = $installer->run();
         $this->assertSame(0, $result);
 
@@ -129,6 +132,25 @@ class InstallerTest extends TestCase
             new ArrayRepository(array($a, $b)),
             array(
                 'install' => array($b)
+            ),
+        );
+
+        // adding coverage for autoloader optimization 
+        $a = $this->getPackage('A', '1.0.0', 'Composer\Package\RootPackage');
+        $a->setRequires(array(
+            new Link('A', 'B', $this->getVersionConstraint('=', '1.0.0')),
+        ));
+        $b = $this->getPackage('B', '1.0.0');
+        $b->setRequires(array(
+            new Link('B', 'A', $this->getVersionConstraint('=', '1.0.0')),
+        ));
+        
+        $cases[] = array(
+            $a,
+            new ArrayRepository(array($a, $b)),
+            array(
+                'install' => array($b),
+                'optimizeAutoloader' => true,
             ),
         );
 
