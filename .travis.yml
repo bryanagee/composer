@@ -19,7 +19,7 @@ before_script:
     - git config --global user.email travis@example.com
 
 script:
-    ./vendor/bin/phpunit -c tests/complete.phpunit.xml --coverage-clover coverage.clover
+    - ./vendor/bin/phpunit -c tests/complete.phpunit.xml --coverage-clover coverage.clover
 
 after_script:
     - wget https://scrutinizer-ci.com/ocular.phar
