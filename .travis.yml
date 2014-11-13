@@ -13,17 +13,15 @@ matrix:
     - php: hhvm
 
 before_script:
+    - sudo apt-get install parallel
+    - rm -f ~/.phpenv/versions/$(phpenv version-name)/etc/conf.d/xdebug.ini
     - composer install --prefer-source
     - bin/composer install --prefer-source
     - git config --global user.name travis-ci
     - git config --global user.email travis@example.com
 
 script:
-    - ./vendor/bin/phpunit -c tests/complete.phpunit.xml --coverage-clover coverage.clover
-
-after_script:
-    - wget https://scrutinizer-ci.com/ocular.phar
-    - php ocular.phar code-coverage:upload --format=php-clover coverage.clover
+    - ls -d tests/Composer/Test/* | parallel --gnu --keep-order 'echo "Running {} tests"; ./vendor/bin/phpunit -c tests/complete.phpunit.xml {};' || exit 1
 
 git:
   depth: 5
